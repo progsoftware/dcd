@@ -11,7 +11,7 @@ This repo contains the runner, which is packaged and distributed as a docker ima
 Create a docker image that is available to each member of the team. When building it is recommended to tag with `latest` so that team members can use this to always get the latest version when running the pipeline.
 
 ```Dockerfile
-FROM ghcr.io/progsoftware/dcd:0.1.0 AS dcd
+FROM ghcr.io/progsoftware/dcd:v0.1.0 AS dcd
 
 FROM your-base-image
 
