@@ -10,8 +10,8 @@ fi
 
 # replace ghcr.io/progsoftware/dcd:VERSION in README.md
 
-sed -i "s|ghcr.io/progsoftware/dcd:[0-9.]*|ghcr.io/progsoftware/dcd:$1|g" README.md
-git commit -m "Update README.md" README.md
 version=$1
+sed -i '' 's#ghcr.io/progsoftware/dcd:v[0-9.]*#ghcr.io/progsoftware/dcd:'$version'#g' README.md
+git commit -m "Update README.md" README.md
 git tag -a $version -m "Release $version"
 git push origin $version
