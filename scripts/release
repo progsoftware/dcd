@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <version>"
+  echo latest tag: $(git describe --tags --abbrev=0)
+  exit 1
+fi
+
+# replace ghcr.io/progsoftware/dcd:VERSION in README.md
+
+sed -i "s|ghcr.io/progsoftware/dcd:[0-9.]*|ghcr.io/progsoftware/dcd:$1|g" README.md
+git commit -m "Update README.md" README.md
+version=$1
+git tag -a $version -m "Release $version"
+git push origin $version
