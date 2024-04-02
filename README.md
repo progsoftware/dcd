@@ -1,3 +1,5 @@
+WARNING: This is in the early stages of development, do not use it yet - you will not have a good experience.
+
 DistributedCD (DCD) is a platform for distributed pipelines (aka CI/CD). It is designed to produce repeatable builds with a centralised and durable build history, but where the execution itself is run locally to give greater immediacy than a typical CI/CD setup.
 
 This repo contains the runner, which is packaged and distributed as a docker image. The runner is a single standalone binary at `/dcd`, which is all the image contains. It is intended to be used as a base image, extended with the dependencies of your CI/CD pipeline. The runner handles interpreting a JSON pipeline definition, executing the steps in the pipeline and persisting the results.
