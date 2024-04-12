@@ -1,10 +1,6 @@
-package pipeline
+package dcd
 
 import "context"
-
-type PipelineState struct {
-	Status string
-}
 
 type Backend interface {
 	GetBuildID(ctx context.Context) (int64, error)

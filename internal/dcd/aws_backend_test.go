@@ -1,4 +1,4 @@
-package pipeline_test
+package dcd_test
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/progsoftware/dcd/internal/pipeline"
+	"github.com/progsoftware/dcd/internal/dcd"
 )
 
 var dbClient *dynamodb.Client
@@ -103,7 +103,7 @@ func TestMain(m *testing.M) {
 func TestMissingTableError(t *testing.T) {
 	ctx := context.Background()
 
-	awsBackend := pipeline.NewAWSBackend(dbClient, "missing-table")
+	awsBackend := dcd.NewAWSBackend(dbClient, "missing-table")
 
 	_, err := awsBackend.GetBuildID(ctx)
 	if err == nil {
@@ -122,7 +122,7 @@ func TestMissingTableError(t *testing.T) {
 func TestIncrementBuildID(t *testing.T) {
 	ctx := context.Background()
 
-	awsBackend := pipeline.NewAWSBackend(dbClient, "test-table")
+	awsBackend := dcd.NewAWSBackend(dbClient, "test-table")
 
 	// First call, item does not exist
 	id, err := awsBackend.GetBuildID(ctx)
@@ -145,23 +145,27 @@ func TestIncrementBuildID(t *testing.T) {
 
 func TestStartPipeline(t *testing.T) {
 	// Given
-	p := pipeline.Pipeline{
-		Steps: []pipeline.Step{},
-	}
-
-	// When
-	eventsChan := p.Run(&pipeline.Metadata{
+	pipeline := dcd.NewPipeline()
+	pipeline.SetMetadata(&dcd.Metadata{
 		Component: "test-component",
 		GitSHA:    "test-git-sha",
-		BuildID:   "test-build-id",
+	})
+	pipeline.SetDefinition(&dcd.PipelineDefinition{
+		Steps: []dcd.Step{},
 	})
 
+	// When
+	eventsChan, err := pipeline.Run()
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
 	// Then
-	var events []pipeline.Event
+	var events []dcd.Event
 	for event := range eventsChan {
 		events = append(events, event)
 	}
 
-	buildID := events[0].(pipeline.PipelineStartEvent).BuildID
+	//buildID := events[0].(dcd.PipelineStartEvent).BuildID
 
 }

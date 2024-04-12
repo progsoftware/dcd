@@ -1,4 +1,4 @@
-package pipeline
+package dcd
 
 import (
 	"fmt"
@@ -8,7 +8,6 @@ import (
 type Metadata struct {
 	Component string
 	GitSHA    string
-	BuildID   string
 }
 
 // Step represents a single step in the pipeline.
@@ -17,8 +16,21 @@ type Step struct {
 	Script string `yaml:"script"`
 }
 
-// Pipeline represents the structure of the pipeline YAML.
+// PipelineState represents the state of a pipeline at a point in time as serialised.
+type PipelineState struct {
+	BuildID int64
+	Status  string
+}
+
+// Pipeline represents a pipeline that you run
 type Pipeline struct {
+	definition *PipelineDefinition
+	metadata   *Metadata
+	backend    Backend
+}
+
+// PipelineDefinition represents the structure of the pipeline YAML.
+type PipelineDefinition struct {
 	GlobalEnv map[string]string `yaml:"global-env"`
 	Steps     []Step            `yaml:"steps"`
 }
@@ -39,7 +51,7 @@ func (be BaseEvent) Timestamp() time.Time {
 // PipelineStartEvent signifies the start of the pipeline execution.
 type PipelineStartEvent struct {
 	BaseEvent
-	BuildID string
+	BuildID int64
 }
 
 func (p PipelineStartEvent) LogMessage() string {
@@ -105,4 +117,18 @@ type StepFailureEvent struct {
 
 func (s StepFailureEvent) LogMessage() string {
 	return fmt.Sprintf("Step failed: %s, Reason: %s", s.StepName, s.Reason)
+}
+
+type UncommittedChangesError struct{}
+
+func (e UncommittedChangesError) Error() string {
+	return "the working directory contains uncommitted changes"
+}
+
+type UnpushedChangesError struct {
+	n string
+}
+
+func (e UnpushedChangesError) Error() string {
+	return fmt.Sprintf("the branch is ahead of remote by %s commits (unpushed changes)", e.n)
 }

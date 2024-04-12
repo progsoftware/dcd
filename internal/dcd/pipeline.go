@@ -1,7 +1,8 @@
-package pipeline
+package dcd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,11 @@ import (
 
 	"gopkg.in/yaml.v2"
 )
+
+// NewPipeline creates a new Pipeline
+func NewPipeline() *Pipeline {
+	return &Pipeline{}
+}
 
 // getRepoName extracts the repository name from a Git URL.
 func getRepoName() (string, error) {
@@ -55,55 +61,96 @@ func getGitSHA() (string, error) {
 }
 
 // LoadMetadata gets the metadata from the environment.
-func LoadMetadata() (*Metadata, error) {
+func (p *Pipeline) LoadMetadata() error {
 	repoName, err := getRepoName()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get repo name: %w", err)
+		return fmt.Errorf("failed to get repo name: %w", err)
 	}
 	gitSha, err := getGitSHA()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get git SHA: %w", err)
+		return fmt.Errorf("failed to get git SHA: %w", err)
 	}
-	return &Metadata{
+	p.metadata = &Metadata{
 		Component: repoName,
 		GitSHA:    gitSha,
-		BuildID:   "TODO",
-	}, nil
+	}
+	return nil
+}
+
+// SetMetadata sets the metadata.
+func (p *Pipeline) SetMetadata(metadata *Metadata) {
+	p.metadata = metadata
 }
 
 // LoadPipeline loads and parses the pipeline YAML file.
-func LoadPipeline(filePath string) (*Pipeline, error) {
-	var pipeline Pipeline
+func (p *Pipeline) LoadPipelineDefinition(filePath string) error {
+	var definition PipelineDefinition
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer file.Close()
 	fileContents, err := io.ReadAll(file)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	err = yaml.Unmarshal(fileContents, &pipeline)
+	err = yaml.Unmarshal(fileContents, &definition)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &pipeline, nil
+	p.definition = &definition
+	return nil
+}
+
+// SetDefinition sets the pipeline definition.
+func (p *Pipeline) SetDefinition(definition *PipelineDefinition) {
+	p.definition = definition
+}
+
+// SetBackend sets the backend.
+func (p *Pipeline) SetBackend(backend Backend) {
+	p.backend = backend
 }
 
 // Run the pipeline, streaming events to the provided channel.
-func (p *Pipeline) Run(metadata *Metadata) chan Event {
+func (p *Pipeline) Run() (chan Event, error) {
+	if err := checkUncommittedChanges(); err != nil {
+		return nil, err
+	}
+	if err := checkIfLocalIsAheadOfRemote("origin", "main"); err != nil {
+		return nil, err
+	}
+	ctx := context.Background()
+	buildID, err := p.backend.GetBuildID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get build ID: %w", err)
+	}
+
+	state := &PipelineState{
+		Status:  "pending",
+		BuildID: buildID,
+	}
+
+	if err := p.backend.PutPipeline(ctx, state); err != nil {
+		return nil, fmt.Errorf("failed to put pipeline: %w", err)
+	}
+
 	events := make(chan Event, 32)
 	go func() {
 		defer close(events)
-		events <- PipelineStartEvent{BaseEvent{EventTime: time.Now()}}
+
+		events <- PipelineStartEvent{
+			BaseEvent: BaseEvent{EventTime: time.Now()},
+			BuildID:   buildID,
+		}
 		env := os.Environ()
-		for k, v := range p.GlobalEnv {
+		for k, v := range p.definition.GlobalEnv {
 			env = append(env, fmt.Sprintf("%s=%s", k, v))
 		}
-		env = append(env, fmt.Sprintf("COMPONENT=%s", metadata.Component))
-		env = append(env, fmt.Sprintf("GIT_SHA=%s", metadata.GitSHA))
-		env = append(env, fmt.Sprintf("BUILD_ID=%s", metadata.BuildID))
-		for _, step := range p.Steps {
+		env = append(env, fmt.Sprintf("COMPONENT=%s", p.metadata.Component))
+		env = append(env, fmt.Sprintf("GIT_SHA=%s", p.metadata.GitSHA))
+		env = append(env, fmt.Sprintf("BUILD_ID=%d", buildID))
+		for _, step := range p.definition.Steps {
 			events <- StepStartEvent{BaseEvent{EventTime: time.Now()}, step.Name}
 			err := p.runStep(env, step, events)
 			if err != nil {
@@ -115,7 +162,7 @@ func (p *Pipeline) Run(metadata *Metadata) chan Event {
 		}
 		events <- PipelineSuccessEvent{BaseEvent{EventTime: time.Now()}}
 	}()
-	return events
+	return events, nil
 }
 
 func (p *Pipeline) runStep(env []string, step Step, events chan Event) error {
@@ -186,7 +233,7 @@ func checkUncommittedChanges() error {
 		return err
 	}
 	if out.String() != "" {
-		return fmt.Errorf("uncommitted changes present")
+		return &UncommittedChangesError{}
 	}
 	return nil
 }
@@ -205,7 +252,7 @@ func checkIfLocalIsAheadOfRemote(remote, branch string) error {
 		return fmt.Errorf("unexpected output from rev-list")
 	}
 	if counts[0] != "0" {
-		return fmt.Errorf("local branch is ahead of remote by %s commits", counts[0])
+		return &UnpushedChangesError{counts[0]}
 	}
 	return nil
 }
