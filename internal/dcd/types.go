@@ -2,6 +2,7 @@ package dcd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -125,10 +126,22 @@ func (e UncommittedChangesError) Error() string {
 	return "the working directory contains uncommitted changes"
 }
 
-type UnpushedChangesError struct {
-	n string
+type UnsyncedChangesError struct {
+	RemoteAhead int
+	LocalAhead  int
 }
 
-func (e UnpushedChangesError) Error() string {
-	return fmt.Sprintf("the branch is ahead of remote by %s commits (unpushed changes)", e.n)
+func (e UnsyncedChangesError) Error() string {
+	parts := []string{}
+	if e.LocalAhead == 1 {
+		parts = append(parts, "1 local commit")
+	} else if e.LocalAhead > 1 {
+		parts = append(parts, fmt.Sprintf("%d local commits", e.LocalAhead))
+	}
+	if e.RemoteAhead == 1 {
+		parts = append(parts, "1 remote commit")
+	} else if e.RemoteAhead > 1 {
+		parts = append(parts, fmt.Sprintf("%d remote commits", e.RemoteAhead))
+	}
+	return fmt.Sprintf("the local repository is out of sync with the upstream repository: %s", strings.Join(parts, " and "))
 }

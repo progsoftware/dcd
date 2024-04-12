@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,8 +252,16 @@ func checkIfLocalIsAheadOfRemote(remote, branch string) error {
 	if len(counts) != 2 {
 		return fmt.Errorf("unexpected output from rev-list")
 	}
-	if counts[0] != "0" {
-		return &UnpushedChangesError{counts[0]}
+	remoteAhead, err := strconv.Atoi(counts[0])
+	if err != nil {
+		return fmt.Errorf("failed to parse remote ahead count: %w", err)
+	}
+	localAhead, err := strconv.Atoi(counts[1])
+	if err != nil {
+		return fmt.Errorf("failed to parse local ahead count: %w", err)
+	}
+	if remoteAhead > 0 || localAhead > 0 {
+		return &UnsyncedChangesError{remoteAhead, localAhead}
 	}
 	return nil
 }
