@@ -145,3 +145,19 @@ func (e UnsyncedChangesError) Error() string {
 	}
 	return fmt.Sprintf("the local repository is out of sync with the upstream repository: %s", strings.Join(parts, " and "))
 }
+
+type NotOnMainBranchError struct {
+	Branch string
+}
+
+func (e NotOnMainBranchError) Error() string {
+	return fmt.Sprintf("the current branch is %q, not main", e.Branch)
+}
+
+type NotTrackingOriginMainError struct {
+	Output string
+}
+
+func (e NotTrackingOriginMainError) Error() string {
+	return fmt.Sprintf("the current branch is not tracking origin/main: %s", e.Output)
+}

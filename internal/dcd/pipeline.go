@@ -118,7 +118,13 @@ func (p *Pipeline) Run() (chan Event, error) {
 	if err := checkUncommittedChanges(); err != nil {
 		return nil, err
 	}
-	if err := checkIfLocalIsAheadOfRemote("origin", "main"); err != nil {
+	if err := checkMainBranch(); err != nil {
+		return nil, err
+	}
+	if err := checkRemoteTrackingBranch(); err != nil {
+		return nil, err
+	}
+	if err := checkIfLocalIsAheadOfRemote(); err != nil {
 		return nil, err
 	}
 	ctx := context.Background()
@@ -239,9 +245,41 @@ func checkUncommittedChanges() error {
 	return nil
 }
 
+// checkMainBranch checks if the current branch is the main branch.
+func checkMainBranch() error {
+	cmd := exec.Command("git", "branch", "--show-current")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(out.String()) != "main" {
+		return &NotOnMainBranchError{}
+	}
+	return nil
+}
+
+// checkRemoteTrackingBranch checks if the local branch is tracking the remote branch.
+func checkRemoteTrackingBranch() error {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	output := strings.TrimSpace(out.String())
+	if output != "origin/main" {
+		return &NotTrackingOriginMainError{output}
+	}
+	return nil
+}
+
 // checkIfLocalIsAheadOfRemote checks if the local branch is ahead of the remote branch.
-func checkIfLocalIsAheadOfRemote(remote, branch string) error {
-	cmd := exec.Command("git", "rev-list", "--left-right", "--count", fmt.Sprintf("%s/%s...HEAD", remote, branch))
+func checkIfLocalIsAheadOfRemote() error {
+	cmd := exec.Command("git", "rev-list", "--left-right", "--count", "origin/main...HEAD")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
